@@ -43,6 +43,33 @@ def synthetic_eval_scene(bands: list[str], deposit_id: str, scene_id: str, size:
                              "pixel_area_m2": 100.0})
 
 
+def fake_catalog(deposit_ids: list[str], start="2019-01-01", end="2026-09-30", every=5,
+                 seed=0, split="val"):
+    """Catalog-shaped DataFrame with random but plausible SCL statistics."""
+    import pandas as pd
+
+    rng = np.random.default_rng(seed)
+    rows = []
+    for did in deposit_ids:
+        for date in pd.date_range(start, end, freq=f"{every}D"):
+            cloud = float(rng.uniform(0, 60))
+            frac = np.zeros(12)
+            frac[5] = 0.7
+            frac[6] = 0.3
+            if rng.random() < cloud / 100:
+                frac[9] = rng.uniform(0, 0.5)
+                frac[5] -= frac[9]
+            row = {"deposit_id": did, "split": split, "date": date,
+                   "scene_id": f"{date:%Y%m%d}_S2A", "item_id": f"S2A_19JBG_{date:%Y%m%d}_0_L2A",
+                   "item_href": "", "tile": "19JBG", "platform": "sentinel-2a",
+                   "processing_baseline": "05.10", "scene_cloud_cover": cloud,
+                   "valid_fraction": float(1 - frac[9]), "shadow_masked": False,
+                   "polygon_pixels": 1000}
+            row.update({f"scl_{k}": float(frac[k]) for k in range(12)})
+            rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def write_eval_scene(scenes_dir: Path, scene: StoredScene) -> Path:
     return save_scene(scenes_dir / scene.meta["deposit_id"] / f"{scene.meta['scene_id']}.npz",
                       scene)
