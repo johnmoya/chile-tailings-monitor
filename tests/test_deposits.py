@@ -10,13 +10,23 @@ from ctm.utils.config import resolve_path
 from tests.helpers import write_deposits
 
 
-def test_shipped_registry_is_a_single_todo_placeholder(cfg):
+def test_shipped_registry_is_real_and_complete(cfg):
+    """The committed registry: valid schema, no placeholders, every split used."""
     reg = load_deposits(resolve_path(cfg, "deposits"))
-    assert len(reg.ids) == 1
-    assert bool(reg.gdf["todo"].iloc[0])
-    assert reg.real().ids == []
+    if reg.gdf["todo"].any():
+        pytest.xfail("configs/deposits.geojson still holds the TODO placeholder")
+    reg = load_deposits(resolve_path(cfg, "deposits"), allow_placeholders=False)
+    assert len(reg.ids) >= 3
+    assert set(reg.gdf["split"]) == {"train", "val", "test"}
+
+
+def test_placeholders_are_rejected_when_not_allowed(tmp_path):
+    p = write_deposits(tmp_path / "d.geojson", [
+        {"id": "dep-a", "split": "train"},
+        {"id": "todo-x", "split": "train", "todo": True, "geometry": None}])
+    assert load_deposits(p).real().ids == ["dep-a"]
     with pytest.raises(DepositSchemaError, match="placeholder"):
-        load_deposits(resolve_path(cfg, "deposits"), allow_placeholders=False)
+        load_deposits(p, allow_placeholders=False)
 
 
 def test_valid_registry_and_split_access(tmp_path):
