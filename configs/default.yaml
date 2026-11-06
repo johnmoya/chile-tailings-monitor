@@ -11,6 +11,12 @@ paths:
   reference_dir: data/reference      # manual reference masks (needed for val/test scoring)
   runs_dir: data/runs                # checkpoints + metric logs, one sub-dir per run
   deposits: configs/deposits.geojson
+  crest_lines: configs/crest_lines.geojson
+  catalog: data/catalog.parquet          # one row per (deposit, scene) on the fixed tile
+  catalog_tiles: data/catalog_tiles.parquet   # candidate MGRS tiles and scene counts
+  catalog_parts: data/catalog_parts      # per-deposit cache (resume)
+  samples_dir: data/samples              # train / series scene selections
+  annotation_dir: annotation             # git-ignored; imagery + mask templates
   reports_dir: reports
   # Committed on purpose (not under data/): git history is the audit trail of the OOS run.
   test_lock: reports/locks/test_evaluation.lock
@@ -51,6 +57,46 @@ stac:
   scl_shadow_cloud_classes: [8, 9, 10]
   shadow_cloud_radius_m: 1500
   min_valid_fraction: 0.8            # inside the polygon; scenes below are discarded
+
+catalog:
+  workers: 16                        # concurrent SCL reads
+  # Tile choice per deposit: among MGRS tiles whose footprint contains the
+  # deposit bbox, the one with most acquisitions in [date_start, date_end]
+  # (no cloud filter). Ties -> alphabetical tile id.
+
+sampling:
+  clean_min_valid_fraction: 0.95     # "clean" scene (valid fraction inside polygon)
+  train_per_month: 2                 # max clean scenes per deposit and calendar month
+  train_min_days_apart: 10           # between the scenes picked in one month
+  series_min_valid_fraction: 0.8     # all scenes at/above go into the time series
+
+annotation:
+  splits: [val, test]
+  scenes_per_deposit: 8
+  seed: 20260706
+  min_valid_fraction: 0.9            # candidate pool for annotation
+  # Mandatory windows, filled first (best valid fraction) if any scene exists.
+  mandatory:
+    - {start: "2026-07-01", end: "2026-07-31"}
+    - {start: "2026-08-01", end: "2026-08-31"}
+  mandatory_min_valid_fraction: 0.8
+  # Southern-hemisphere seasons (month numbers)
+  seasons:
+    summer: [12, 1, 2]
+    autumn: [3, 4, 5]
+    winter: [6, 7, 8]
+    spring: [9, 10, 11]
+  stretch_percentiles: [2, 98]
+  min_coverage: 0.98                 # validator: labelled fraction of polygon pixels
+
+diagnostics:
+  low_cloud_max: 10                  # scene eo:cloud_cover (%) considered "low"
+  bright_class_threshold: 0.10       # class 8/9/10/11 fraction in polygon to flag a scene
+  flag_min_share: 0.10               # flag deposit if >= this share of low-cloud scenes hit
+
+derived:
+  beach_inset_m: 30                  # polygon eroded inward before computing beach fraction
+  min_valid_fraction: 0.8            # of the inset polygon; below -> NaN
 
 baseline:
   green_band: B03

@@ -1,4 +1,6 @@
-# data and run artefacts (never committed); anchored so src/ctm/data/ is kept
+# data and run artefacts (never committed); anchored so src/ctm/data/
+# annotation kit: imagery + masks in progress (large; versioning decided separately)
+/annotation/ is kept
 /data/
 *.pt
 *.ckpt
