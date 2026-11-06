@@ -1,0 +1,32 @@
+{
+  "type": "FeatureCollection",
+  "name": "ctm_deposits",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "schema": {
+    "description": "One feature per tailings deposit. Geometry: Polygon/MultiPolygon in WGS84 (lon, lat), the deposit footprint. Source: Plataforma Publica de Relaves (Sernageomin).",
+    "required_properties": {
+      "id": "string, unique, stable, [a-z0-9_-]+",
+      "nombre": "string, deposit name as published by Sernageomin",
+      "region": "string, Chilean region",
+      "split": "one of train | val | test (assigned per deposit, never per tile)"
+    },
+    "optional_properties": {
+      "sernageomin_id": "string, identifier in the Sernageomin registry",
+      "todo": "boolean, true marks a placeholder feature; placeholders are rejected by every pipeline step"
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "todo-example",
+        "nombre": "TODO: nombre segun Sernageomin",
+        "region": "TODO",
+        "split": "train",
+        "sernageomin_id": "TODO",
+        "todo": true
+      },
+      "geometry": null
+    }
+  ]
+}
