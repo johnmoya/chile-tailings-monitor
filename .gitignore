@@ -1,0 +1,19 @@
+# data and run artefacts (never committed); anchored so src/ctm/data/ is kept
+/data/
+*.pt
+*.ckpt
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store

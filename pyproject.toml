@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chile-tailings-monitor"
+version = "0.0.1"
+description = "Sentinel-2 monitoring of Chilean tailings storage facilities: supernatant pond segmentation."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+# Pins are the newest releases that support BOTH Python 3.11 and 3.12, so the
+# CI matrix runs the same library versions on each interpreter. Transitive
+# versions are frozen in uv.lock.
+dependencies = [
+    "rasterio==1.4.4",
+    "rioxarray==0.19.0",
+    "xarray==2026.9.0",
+    "geopandas==1.2.0",
+    "shapely==2.2.0",
+    "pystac-client==0.9.1",
+    "numpy==2.4.6",
+    "scikit-image==0.26.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "segmentation-models-pytorch==0.6.0",
+    "pyyaml==6.0.3",
+]
+
+[dependency-groups]
+dev = ["pytest==9.2.0", "ruff==0.17.4"]
+# Exactly one torch flavour group is active. Local GPU box: cu130 (default).
+# CI: `uv sync --no-default-groups --group dev --group cpu`.
+cpu = ["torch==2.14.1", "torchvision==0.29.1"]
+cu130 = ["torch==2.14.1", "torchvision==0.29.1"]
+
+[tool.uv]
+default-groups = ["dev", "cu130"]
+conflicts = [[{ group = "cpu" }, { group = "cu130" }]]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu130", group = "cu130" },
+]
+torchvision = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu130", group = "cu130" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ctm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "network: needs internet access (STAC / COG reads); excluded in CI",
+    "gpu: needs a CUDA GPU; excluded in CI",
+]
+filterwarnings = [
+    # affine >= 2.4 deprecates `*` for transforms; raised inside rasterio/rioxarray, not our code.
+    "ignore:Use `@` matmul instead of `\\*` mul operator:PendingDeprecationWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ctm", "tests"]
+known-local-folder = ["evaluate_test", "train_smoke", "check_gpu"]
