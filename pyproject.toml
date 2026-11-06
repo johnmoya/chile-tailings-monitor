@@ -24,6 +24,8 @@ dependencies = [
     "torchvision==0.29.1",
     "segmentation-models-pytorch==0.6.0",
     "pyyaml==6.0.3",
+    "pandas==3.1.1",
+    "pyarrow==26.0.1",
 ]
 
 [dependency-groups]
@@ -81,4 +83,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["ctm", "tests"]
-known-local-folder = ["evaluate_test", "train_smoke", "check_gpu"]
+known-local-folder = [
+    "evaluate_test", "train_smoke", "check_gpu", "validate_annotations", "validate_deposits",
+    "build_catalog", "build_annotation_kit", "mask_diagnostics", "ingest_scenes",
+]
