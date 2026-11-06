@@ -23,6 +23,7 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: true
+          cache-suffix: py${{ matrix.python-version }}
       - name: Install (CPU-only torch)
         run: >
           uv sync --locked --python ${{ matrix.python-version }}
