@@ -61,6 +61,21 @@ uv sync --no-default-groups --group dev --group cpu
 Configuration lives in `configs/default.yaml`; scripts accept
 `key.path=value` overrides (e.g. `train.device=cpu`).
 
+## Running M1 (ingestion, diagnostics, annotation kit — no training)
+
+```bash
+uv run python scripts/validate_deposits.py      # schema, no placeholders, all splits
+uv run python scripts/build_catalog.py          # data/catalog.parquet + scene selections
+uv run python scripts/mask_diagnostics.py       # reports/m1_mask_diagnostics.md
+uv run python scripts/ingest_scenes.py --selection train
+uv run python scripts/build_annotation_kit.py   # annotation/<deposit>/<date>/
+uv run python scripts/validate_annotations.py   # grid, values, coverage of the masks
+```
+
+Primary metric: IoU per deposit, averaged over deposits (`iou_macro_deposit`);
+the pixel-pooled IoU (`iou_micro_pixel`) is always reported next to it.
+See [PREREG.md](PREREG.md) (draft).
+
 ### Test-set lock
 
 `scripts/evaluate_test.py` refuses to run without
