@@ -62,7 +62,9 @@ def test_single_run_then_locked(setup):
     assert lock["status"] == "completed" and lock["test_deposits"] == ["dep-t"]
     res = json.loads(setup["out"].read_text())
     assert {"unet", "baseline"} <= set(res["overall"])
-    assert res["overall"]["baseline"]["iou"] > 0.99   # synthetic pond is trivially separable
+    base = res["overall"]["baseline"]
+    assert base["iou_macro_deposit"] > 0.99   # synthetic pond is trivially separable
+    assert base["iou_micro_pixel"] > 0.99      # both metrics always reported
     # Second run: refused, results untouched.
     before = setup["out"].read_text()
     assert evaluate_test.main(_argv(setup)) == 3

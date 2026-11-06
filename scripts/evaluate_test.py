@@ -114,7 +114,10 @@ def main(argv: list[str] | None = None) -> int:
     overall = results["overall"]
     for name in ("baseline", "unet"):
         o = overall[name]
-        print(f"{name:9s} IoU={o['iou']:.4f} F1={o['f1']:.4f} area MAE={o['area_mae_m2']:.0f} m2")
+        print(f"{name:9s} IoU macro/deposit (PRIMARY)={o['iou_macro_deposit']:.4f} "
+              f"IoU micro/pixel={o['iou_micro_pixel']:.4f} "
+              f"F1 macro={o['f1_macro_deposit']:.4f} area MAE={o['area_mae_m2']:.0f} m2 "
+              f"(deposits={o['n_deposits']}, undefined={o['n_deposits_undefined']})")
     print(f"results -> {out}\nlock    -> {lock_path}")
     return 0
 

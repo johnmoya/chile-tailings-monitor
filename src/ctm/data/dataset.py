@@ -73,4 +73,4 @@ class SyntheticWaterDataset(Dataset):
         label = water.astype("int64")
         label[: s // 16, :] = self.ignore_index  # a strip of "cloud"
         return {"image": torch.from_numpy(image), "label": torch.from_numpy(label),
-                "deposit_id": f"synthetic-{idx}"}
+                "deposit_id": f"synthetic-{idx % 4}"}

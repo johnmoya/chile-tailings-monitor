@@ -41,7 +41,9 @@ def test_one_epoch_cpu_writes_checkpoints_and_log(tmp_cfg, tmp_path):
     assert (tmp_path / "run" / "best.pt").is_file()
     lines = (tmp_path / "run" / "metrics.jsonl").read_text().splitlines()
     rec = json.loads(lines[0])
-    assert rec["epoch"] == 1 and {"iou", "f1", "loss"} <= set(rec["val"])
+    assert rec["epoch"] == 1
+    assert {"iou_macro_deposit", "iou_micro_pixel", "f1_macro_deposit", "loss"} <= set(rec["val"])
+    assert rec["val"]["n_deposits"] == 4
     model, state = load_checkpoint(res.last_checkpoint)
     assert state["epoch"] == 1
 
@@ -63,4 +65,5 @@ def test_one_epoch_gpu_bf16(tmp_cfg, tmp_path):
     assert res.peak_vram_mib < 11 * 1024  # fits on a 12 GB card
     rec = res.history[0]
     assert rec["train"]["loss"] == rec["train"]["loss"]  # not NaN
-    print(f"\npeak VRAM: {res.peak_vram_mib:.0f} MiB; val IoU {rec['val']['iou']:.3f}")
+    print(f"\npeak VRAM: {res.peak_vram_mib:.0f} MiB; val IoU macro "
+          f"{rec['val']['iou_macro_deposit']:.3f} / micro {rec['val']['iou_micro_pixel']:.3f}")

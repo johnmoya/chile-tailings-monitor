@@ -15,7 +15,7 @@ import torch
 
 from ctm.baseline.mndwi_otsu import segment_scene
 from ctm.data.scene_io import StoredScene
-from ctm.metrics.segmentation import Confusion, confusion
+from ctm.metrics.segmentation import Confusion, confusion, deposit_summary
 from ctm.models.inference import predict_scene
 
 
@@ -29,10 +29,10 @@ def evaluate_scenes(
     thr = cfg["train"]["threshold"]
     amp_dtype = torch.bfloat16 if cfg["train"]["amp"] and torch.device(device).type == "cuda" \
         else None
+    methods = ("unet", "baseline")
     per_scene: list[dict] = []
-    per_deposit: dict[str, dict[str, Confusion]] = defaultdict(
-        lambda: {"unet": Confusion(), "baseline": Confusion()})
-    totals = {"unet": Confusion(), "baseline": Confusion()}
+    # per_deposit[method][deposit_id] -> pooled confusion of that deposit's scenes
+    per_deposit: dict[str, dict[str, Confusion]] = {m: defaultdict(Confusion) for m in methods}
 
     for sc in scenes:
         if sc.reference is None:
@@ -53,8 +53,7 @@ def evaluate_scenes(
                "ref_area_m2": float((ref & scored).sum() * px_area)}
         for name, pred in preds.items():
             cm = confusion(pred, ref, scored)
-            totals[name] += cm
-            per_deposit[sc.meta["deposit_id"]][name] += cm
+            per_deposit[name][sc.meta["deposit_id"]] += cm
             area = float((pred & scored).sum() * px_area)
             rec[name] = {"iou": cm.iou, "f1": cm.f1, "area_m2": area,
                          "area_abs_err_m2": abs(area - rec["ref_area_m2"])}
@@ -65,8 +64,10 @@ def evaluate_scenes(
         return float(np.mean(errs)) if errs else float("nan")
 
     return {
-        "overall": {n: dict(cm.as_dict(), area_mae_m2=_area_mae(n)) for n, cm in totals.items()},
-        "per_deposit": {d: {n: cm.as_dict() for n, cm in v.items()}
-                        for d, v in per_deposit.items()},
+        # PRIMARY: iou_macro_deposit. SECONDARY: iou_micro_pixel (+ the rest).
+        "overall": {m: dict(deposit_summary(per_deposit[m]), area_mae_m2=_area_mae(m))
+                    for m in methods},
+        "per_deposit": {m: {d: cm.as_dict() for d, cm in per_deposit[m].items()}
+                        for m in methods},
         "per_scene": per_scene,
     }

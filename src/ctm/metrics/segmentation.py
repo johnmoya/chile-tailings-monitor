@@ -72,6 +72,34 @@ def confusion(pred, target, valid=None) -> Confusion:
     )
 
 
+def deposit_summary(per_deposit: dict[str, Confusion]) -> dict:
+    """PRIMARY metric: IoU per deposit (pixels pooled within each deposit), then the
+    unweighted mean across deposits. SECONDARY: IoU over all pixels pooled.
+
+    Deposits whose IoU is undefined (no water in reference nor prediction) are
+    excluded from the macro mean and counted in ``n_deposits_undefined``.
+    Both numbers are always reported together.
+    """
+    ious = {d: cm.iou for d, cm in per_deposit.items()}
+    f1s = {d: cm.f1 for d, cm in per_deposit.items()}
+    defined = [v for v in ious.values() if v == v]
+    defined_f1 = [v for v in f1s.values() if v == v]
+    pooled = Confusion()
+    for cm in per_deposit.values():
+        pooled += cm
+    return {
+        "iou_macro_deposit": float(np.mean(defined)) if defined else float("nan"),
+        "f1_macro_deposit": float(np.mean(defined_f1)) if defined_f1 else float("nan"),
+        "iou_micro_pixel": pooled.iou,
+        "f1_micro_pixel": pooled.f1,
+        "precision_micro_pixel": pooled.precision,
+        "recall_micro_pixel": pooled.recall,
+        "n_deposits": len(per_deposit),
+        "n_deposits_undefined": len(per_deposit) - len(defined),
+        "iou_per_deposit": ious,
+    }
+
+
 def iou(pred, target, valid=None) -> float:
     return confusion(pred, target, valid).iou
 

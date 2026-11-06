@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from ctm.metrics.segmentation import Confusion, confusion
+from ctm.metrics.segmentation import Confusion, confusion, deposit_summary
 from ctm.models.unet import build_model
 from ctm.utils.seed import seed_everything, worker_init_fn
 
@@ -62,7 +63,8 @@ def _run_epoch(model, loader, device, amp, amp_dtype, ignore_index, bce_weight, 
                optimizer=None) -> dict:
     training = optimizer is not None
     model.train(training)
-    total_loss, n_batches, cm = 0.0, 0, Confusion()
+    total_loss, n_batches = 0.0, 0
+    per_deposit: dict[str, Confusion] = defaultdict(Confusion)
     for batch in loader:
         x = batch["image"].to(device, non_blocking=True)
         y = batch["label"].to(device, non_blocking=True)
@@ -78,8 +80,11 @@ def _run_epoch(model, loader, device, amp, amp_dtype, ignore_index, bce_weight, 
         n_batches += 1
         with torch.no_grad():
             pred = torch.sigmoid(logits[:, 0].float()) > threshold
-            cm += confusion(pred, y == 1, y != ignore_index)
-    return {"loss": total_loss / max(n_batches, 1), **cm.as_dict()}
+            for i, did in enumerate(batch["deposit_id"]):
+                per_deposit[did] += confusion(pred[i], y[i] == 1, y[i] != ignore_index)
+    summary = deposit_summary(per_deposit)
+    summary.pop("iou_per_deposit")
+    return {"loss": total_loss / max(n_batches, 1), **summary}
 
 
 def train(cfg: dict, train_ds: Dataset, val_ds: Dataset | None, run_dir: str | Path) -> TrainResult:
@@ -129,7 +134,8 @@ def train(cfg: dict, train_ds: Dataset, val_ds: Dataset | None, run_dir: str | P
                  "model_cfg": cfg["model"], "seed": cfg["seed"]}
         result.last_checkpoint = run_dir / "last.pt"
         torch.save(state, result.last_checkpoint)
-        score = record.get("val", record["train"])["iou"]
+        # Model selection on the PRIMARY metric (macro over deposits).
+        score = record.get("val", record["train"])["iou_macro_deposit"]
         if score == score and score > best:  # NaN-safe
             best = score
             result.best_val_iou = score
