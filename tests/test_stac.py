@@ -135,3 +135,39 @@ def test_stac_single_small_scene(cfg):
     # Surface reflectance after scale/offset: physically plausible range.
     assert np.nanpercentile(finite, 1) > -0.2 and np.nanpercentile(finite, 99) < 1.5
     assert scene.crs.startswith("EPSG:327")
+    assert scene.scl.shape == (h, w) and scene.scl.dtype == np.uint8
+    assert isinstance(scene.meta["shadow_masked"], bool) and scene.meta["tile"]
+
+
+@pytest.mark.network
+def test_catalog_and_annotation_export_end_to_end(cfg, tmp_path):
+    """Catalog two months for the smoke box, export one scene, validate the kit."""
+    from functools import partial
+
+    from ctm.data.catalog import catalog_deposit
+    from ctm.data.ingest import load_item
+    from ctm.data.stac import item_crs, load_scene
+    from ctm.labels.annotation import export_scene, validate_scene_dir
+    from ctm.utils.geo import reproject_geometry
+
+    search = partial(search_items_window, start="2019-01-01", end="2019-02-28")
+    df, counts = catalog_deposit("smoke-box", "val", SMOKE_BOX, cfg, search_fn=search,
+                                 workers=4)
+    assert len(df) >= 3 and df["tile"].nunique() == 1
+    assert counts[df["tile"].iloc[0]] == len(df)
+    assert df["valid_fraction"].between(0, 1).all()
+    assert np.allclose(df[[f"scl_{k}" for k in range(12)]].sum(axis=1), 1.0)
+
+    row = df.sort_values("valid_fraction").iloc[-1]
+    item = load_item(row["item_href"])
+    scene = load_scene(item, SMOKE_BOX, cfg["stac"])
+    poly = reproject_geometry(SMOKE_BOX, "EPSG:4326", item_crs(item))
+    d = export_scene(scene, "smoke-box", poly, tmp_path / "annotation", cfg)
+    rep = validate_scene_dir(d, cfg["annotation"]["min_coverage"])
+    assert rep.status == "pending" and not rep.problems
+
+
+def search_items_window(geom, stac_cfg, start, end, **kw):
+    from ctm.data.stac import search_items
+
+    return search_items(geom, stac_cfg, start, end, **kw)
