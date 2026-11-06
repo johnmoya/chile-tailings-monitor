@@ -1,3 +1,5 @@
+import datetime
+
 import numpy as np
 import pytest
 from shapely.geometry import box
@@ -27,9 +29,85 @@ def test_reproject_geometry_roundtrip_and_polygon_mask():
 
 def test_scl_mask_default_classes(cfg):
     scl = np.arange(12, dtype=np.uint8).reshape(3, 4)
-    valid = scl_valid_mask(scl, cfg["stac"]["scl_invalid_classes"])
+    s = cfg["stac"]
+    # Shadow (3) is kept unless the shadow rule fires.
+    valid = scl_valid_mask(scl, s["scl_invalid_classes"], s["scl_shadow_class"], False)
     assert valid.ravel().tolist() == [
-        False, False, True, False, True, True, True, True, False, False, False, False]
+        False, False, True, True, True, True, True, True, False, False, False, False]
+    valid = scl_valid_mask(scl, s["scl_invalid_classes"], s["scl_shadow_class"], True)
+    assert not valid.ravel()[3]
+
+
+def test_item_tile_from_properties_and_id():
+    from pystac import Item
+
+    from ctm.data.stac import item_tile
+
+    def mk(props, iid="x"):
+        return Item(iid, None, None, datetime.datetime(2020, 1, 1), props)
+
+    assert item_tile(mk({"grid:code": "MGRS-19JBG"})) == "19JBG"
+    assert item_tile(mk({"mgrs:utm_zone": 19, "mgrs:latitude_band": "J",
+                         "mgrs:grid_square": "BG"})) == "19JBG"
+    assert item_tile(mk({}, "S2A_19JCH_20190129_0_L2A")) == "19JCH"
+
+
+# --- FIX-1: shadow rule ------------------------------------------------------------
+
+def _shadow_setup():
+    """20 m SCL window: inner bbox = 1 km square, extended by 1.5 km on each side.
+
+    Inner bbox spans x,y in [1500, 2500] m of a 4 km x 4 km window (200 x 200 px).
+    A 'lagoon' inside the bbox is labelled SCL=3 (dark water misread as shadow);
+    the rest is bare soil (5).
+    """
+    from affine import Affine
+
+    t = Affine(20, 0, 0, 0, -20, 4000)       # origin top-left at (0, 4000)
+    ext = np.full((200, 200), 5, np.uint8)
+    bounds = (1500.0, 1500.0, 2500.0, 2500.0)
+    # inner rows/cols for y,x in [1500,2500]: cols 75..124, rows 75..124
+    ext[90:110, 90:110] = 3                  # the "lagoon"
+    inner = ext[75:125, 75:125].copy()
+    return ext, inner, t, bounds
+
+
+def test_shadow_without_clouds_is_kept(cfg):
+    from ctm.data.stac import scl_validity
+
+    ext, inner, t, bounds = _shadow_setup()
+    valid, shadow = scl_validity(inner, ext, t, bounds, cfg["stac"])
+    assert shadow is False
+    assert valid[15:35, 15:35].all()          # lagoon pixels survive
+
+
+def test_shadow_with_cloud_within_radius_is_masked(cfg):
+    from ctm.data.stac import scl_validity
+
+    ext, inner, t, bounds = _shadow_setup()
+    ext[60, 100] = 9   # cloud ~ 290 m north of the bbox edge (row 60 -> y = 2790)
+    valid, shadow = scl_validity(inner, ext, t, bounds, cfg["stac"])
+    assert shadow is True
+    assert not valid[15:35, 15:35].any()
+
+
+def test_cloud_beyond_radius_does_not_trigger(cfg):
+    from ctm.data.stac import clouds_near_bbox
+
+    ext, _, t, bounds = _shadow_setup()
+    ext[0, 0] = 8      # corner pixel centre (10, 3990): ~2.1 km from the bbox corner
+    assert not clouds_near_bbox(ext, t, bounds, 1500, [8, 9, 10])
+    assert clouds_near_bbox(ext, t, bounds, 2200, [8, 9, 10])
+    ext[0, 0] = 11     # snow is not a shadow-casting class
+    assert not clouds_near_bbox(ext, t, bounds, 5000, [8, 9, 10])
+
+
+def test_scl_fractions():
+    from ctm.data.stac import scl_fractions
+
+    scl = np.array([[3, 3], [6, 9]], np.uint8)
+    f = scl_fractions(scl, np.ones((2, 2), bool))
+    assert f[3] == 0.5 and f[6] == 0.25 and f[9] == 0.25 and f[0] == 0
 
 
 # Arbitrary ~1 km box near La Serena used only to exercise the STAC/COG path.
