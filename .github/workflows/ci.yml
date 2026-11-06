@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}  # overrides .python-version (3.12) for uv run
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.5"
+          enable-cache: true
+      - name: Install (CPU-only torch)
+        run: >
+          uv sync --locked --python ${{ matrix.python-version }}
+          --no-default-groups --group dev --group cpu
+      - name: Lint
+        run: uv run --no-sync ruff check src scripts tests
+      - name: Test (no network, no GPU)
+        run: uv run --no-sync pytest -m "not network and not gpu" -q
